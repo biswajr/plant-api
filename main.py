@@ -73,8 +73,11 @@ def index():
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
+    global cnn, CLASS_NAMES
     if cnn is None or CLASS_NAMES is None:
-        raise HTTPException(503, "Model not loaded")
+        load_model_and_class()
+        if cnn is None or CLASS_NAMES is None:
+            raise HTTPException(503, "Model not loaded")
 
     if not file.content_type.startswith("image/"):
         raise HTTPException(400, "File must be an image")
@@ -136,12 +139,6 @@ async def upload_model(
 
     with open(CLASS_PATH, "wb") as f:
         f.write(await class_file.read())
-
-    load_model_and_class()
-
-    if cnn is None or CLASS_NAMES is None:
-        raise HTTPException(500, "Model reload failed")
-
     return {
         "status": "success",
         "message": "Model and class uploaded & loaded successfully",
