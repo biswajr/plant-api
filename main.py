@@ -72,6 +72,10 @@ def preprocess_image_bytes(image_bytes: bytes) -> np.ndarray:
     arr = tf.keras.preprocessing.image.img_to_array(image)
     return np.expand_dims(arr, axis=0)
 
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return "Plant Disease API is running"
+
 @app.get("/ping")
 async def ping():
     return {"message": "pong"}
