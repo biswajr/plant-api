@@ -11,13 +11,13 @@ import numpy as np
 load_dotenv()
 
 # for serverless
-BASE_DIR = Path("/tmp")
-MODEL_PATH = BASE_DIR / "model.keras"
-CLASS_PATH = BASE_DIR / "class.json"
-
-# BASE_DIR = Path(__file__).resolve().parent
+# BASE_DIR = Path("/tmp")
 # MODEL_PATH = BASE_DIR / "model.keras"
 # CLASS_PATH = BASE_DIR / "class.json"
+
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "model.keras"
+CLASS_PATH = BASE_DIR / "class.json"
 
 TARGET_SIZE = (128, 128)
 
