@@ -1,7 +1,6 @@
 import io
 import json
 from pathlib import Path
-import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,12 +10,12 @@ import numpy as np
 
 load_dotenv()
 
-BASE_DIR = Path(__file__).parent
-MODEL_PATH = BASE_DIR / os.getenv("MODEL_PATH", "model.keras")
-CLASSES_PATH = BASE_DIR / os.getenv("CLASSES_PATH", "classes.json")
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "model.keras"
+CLASS_PATH = BASE_DIR / "class.json"
 
 TARGET_SIZE = (128, 128)
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*")
+FRONTEND_ORIGIN = "*"
 
 cnn = None
 CLASS_NAMES = None
@@ -25,35 +24,37 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN] if FRONTEND_ORIGIN != "*" else ["*"],
+    allow_origins=[FRONTEND_ORIGIN],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-def load_model_and_classes():
+def load_model_and_class():
     global cnn, CLASS_NAMES
-
     cnn = None
     CLASS_NAMES = None
 
-    if not MODEL_PATH.exists():
-        print("model.keras not found, skipping load")
+    print(f"Looking for model: {MODEL_PATH}")
+    print(f"Looking for class: {CLASS_PATH}")
+
+    if not MODEL_PATH.is_file():
+        print("model.keras not found")
         return
 
-    if not CLASSES_PATH.exists():
-        print("classes.json not found, skipping load")
+    if not CLASS_PATH.is_file():
+        print("class.json not found")
         return
 
     try:
         cnn = tf.keras.models.load_model(str(MODEL_PATH))
-        with open(CLASSES_PATH, "r") as f:
+        with open(CLASS_PATH, "r") as f:
             CLASS_NAMES = json.load(f)
 
         if not isinstance(CLASS_NAMES, list):
-            raise ValueError("classes.json must be a list")
+            raise ValueError("class.json must be a list")
 
-        print("Model & classes loaded successfully")
+        print("Model & class loaded successfully")
 
     except Exception as e:
         cnn = None
@@ -62,7 +63,7 @@ def load_model_and_classes():
 
 @app.on_event("startup")
 def startup_event():
-    load_model_and_classes()
+    load_model_and_class()
 
 def preprocess_image_bytes(image_bytes: bytes) -> np.ndarray:
     img_io = io.BytesIO(image_bytes)
@@ -76,26 +77,19 @@ def preprocess_image_bytes(image_bytes: bytes) -> np.ndarray:
 def index():
     return "Plant Disease API is running"
 
-@app.get("/ping")
-async def ping():
-    return {"message": "pong"}
-
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     if cnn is None or CLASS_NAMES is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+        raise HTTPException(503, "Model not loaded")
 
     if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
+        raise HTTPException(400, "File must be an image")
 
     image_bytes = await file.read()
     if not image_bytes:
-        raise HTTPException(status_code=400, detail="Empty file")
+        raise HTTPException(400, "Empty file")
 
-    try:
-        input_arr = preprocess_image_bytes(image_bytes)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    input_arr = preprocess_image_bytes(image_bytes)
 
     preds = cnn.predict(input_arr)
     idx = int(np.argmax(preds))
@@ -117,20 +111,14 @@ async def predict(file: UploadFile = File(...)):
 @app.get("/upload", response_class=HTMLResponse)
 def upload_page():
     return """
-    <!DOCTYPE html>
     <html>
-    <head><title>Upload Model</title></head>
-    <body style="font-family: Arial; padding: 40px;">
-        <h2>Upload Model & Classes</h2>
-        <form action="/upload-model" method="post" enctype="multipart/form-data">
-            <label>Model (.keras)</label><br>
-            <input type="file" name="model" accept=".keras" required><br><br>
-
-            <label>Classes (classes.json)</label><br>
-            <input type="file" name="classes" accept=".json" required><br><br>
-
-            <button type="submit">Upload</button>
-        </form>
+    <body style="font-family:Arial;padding:40px">
+      <h2>Upload Model</h2>
+      <form action="/upload-model" method="post" enctype="multipart/form-data">
+        <input type="file" name="model" accept=".keras" required><br><br>
+        <input type="file" name="class" accept=".json" required><br><br>
+        <button>Upload</button>
+      </form>
     </body>
     </html>
     """
@@ -138,31 +126,31 @@ def upload_page():
 @app.post("/upload-model")
 async def upload_model(
     model: UploadFile = File(...),
-    classes: UploadFile = File(...)
+    class: UploadFile = File(...)
 ):
-    try:
-        if not model.filename.endswith(".keras"):
-            raise HTTPException(400, "Model must be .keras")
+    if not model.filename.endswith(".keras"):
+        raise HTTPException(400, "Model must be .keras")
 
-        if not classes.filename.endswith(".json"):
-            raise HTTPException(400, "Classes must be .json")
+    if not class.filename.endswith(".json"):
+        raise HTTPException(400, "Class must be .json")
 
-        with open(MODEL_PATH, "wb") as f:
-            f.write(await model.read())
+    if MODEL_PATH.exists():
+        MODEL_PATH.unlink()
+    if CLASS_PATH.exists():
+        CLASS_PATH.unlink()
 
-        with open(CLASSES_PATH, "wb") as f:
-            f.write(await classes.read())
+    with open(MODEL_PATH, "wb") as f:
+        f.write(await model.read())
 
-        load_model_and_classes()
+    with open(CLASS_PATH, "wb") as f:
+        f.write(await class.read())
 
-        if cnn is None or CLASS_NAMES is None:
-            raise RuntimeError("Model reload failed")
+    load_model_and_class()
 
-        return {
-            "status": "success",
-            "message": "Model and classes uploaded & loaded successfully"
-        }
+    if cnn is None or CLASS_NAMES is None:
+        raise HTTPException(500, "Model reload failed")
 
-    except Exception as e:
-        print(f"Upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": "Model and class uploaded & loaded successfully",
+    }
