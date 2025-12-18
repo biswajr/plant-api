@@ -15,7 +15,6 @@ MODEL_PATH = BASE_DIR / "model.keras"
 CLASS_PATH = BASE_DIR / "class.json"
 
 TARGET_SIZE = (128, 128)
-FRONTEND_ORIGIN = "*"
 
 cnn = None
 CLASS_NAMES = None
@@ -24,7 +23,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,31 +34,21 @@ def load_model_and_class():
     cnn = None
     CLASS_NAMES = None
 
-    print(f"Looking for model: {MODEL_PATH}")
-    print(f"Looking for class: {CLASS_PATH}")
-
     if not MODEL_PATH.is_file():
-        print("model.keras not found")
         return
-
     if not CLASS_PATH.is_file():
-        print("class.json not found")
         return
 
     try:
         cnn = tf.keras.models.load_model(str(MODEL_PATH))
         with open(CLASS_PATH, "r") as f:
             CLASS_NAMES = json.load(f)
-
         if not isinstance(CLASS_NAMES, list):
-            raise ValueError("class.json must be a list")
-
-        print("Model & class loaded successfully")
-
-    except Exception as e:
+            cnn = None
+            CLASS_NAMES = None
+    except:
         cnn = None
         CLASS_NAMES = None
-        print(f"Model load failed: {e}")
 
 @app.on_event("startup")
 def startup_event():
@@ -90,7 +79,6 @@ async def predict(file: UploadFile = File(...)):
         raise HTTPException(400, "Empty file")
 
     input_arr = preprocess_image_bytes(image_bytes)
-
     preds = cnn.predict(input_arr)
     idx = int(np.argmax(preds))
     confidence = int(round(float(preds[0][idx]) * 100))
@@ -112,11 +100,10 @@ async def predict(file: UploadFile = File(...)):
 def upload_page():
     return """
     <html>
-    <body style="font-family:Arial;padding:40px">
-      <h2>Upload Model</h2>
+    <body>
       <form action="/upload-model" method="post" enctype="multipart/form-data">
         <input type="file" name="model" accept=".keras" required><br><br>
-        <input type="file" name="class" accept=".json" required><br><br>
+        <input type="file" name="class_file" accept=".json" required><br><br>
         <button>Upload</button>
       </form>
     </body>
@@ -126,12 +113,12 @@ def upload_page():
 @app.post("/upload-model")
 async def upload_model(
     model: UploadFile = File(...),
-    class: UploadFile = File(...)
+    class_file: UploadFile = File(...)
 ):
     if not model.filename.endswith(".keras"):
         raise HTTPException(400, "Model must be .keras")
 
-    if not class.filename.endswith(".json"):
+    if not class_file.filename.endswith(".json"):
         raise HTTPException(400, "Class must be .json")
 
     if MODEL_PATH.exists():
@@ -143,7 +130,7 @@ async def upload_model(
         f.write(await model.read())
 
     with open(CLASS_PATH, "wb") as f:
-        f.write(await class.read())
+        f.write(await class_file.read())
 
     load_model_and_class()
 
