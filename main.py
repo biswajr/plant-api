@@ -30,27 +30,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def load_model_and_classes():
-    global cnn, CLASS_NAMES
-    if not MODEL_PATH.exists():
-        print("model.keras not found, skipping load")
-        return
-
-    if not CLASSES_PATH.exists():
-        print("classes.json not found, skipping load")
-        return
-
+@app.post("/upload-model")
+async def upload_model(
+    model: UploadFile = File(...),
+    classes: UploadFile = File(...)
+):
     try:
-        cnn = tf.keras.models.load_model(str(MODEL_PATH))
-        with open(CLASSES_PATH) as f:
-            CLASS_NAMES = json.load(f)
+        if not model.filename.endswith(".keras"):
+            raise HTTPException(status_code=400, detail="Model must be .keras")
 
-        print("Model & classes loaded successfully")
+        if not classes.filename.endswith(".json"):
+            raise HTTPException(status_code=400, detail="Classes must be .json")
+
+        # Save model
+        with open(MODEL_PATH, "wb") as f:
+            data = await model.read()
+            f.write(data)
+            print(f"Saved model file ({len(data)} bytes)")
+
+        # Save classes
+        with open(CLASSES_PATH, "wb") as f:
+            data = await classes.read()
+            f.write(data)
+            print(f"Saved classes file ({len(data)} bytes)")
+
+        load_model_and_classes()
+
+        if cnn is None or CLASS_NAMES is None:
+            raise RuntimeError("Model reload failed after upload")
+
+        return {
+            "status": "success",
+            "message": "Model and classes uploaded and loaded successfully"
+        }
 
     except Exception as e:
-        cnn = None
-        CLASS_NAMES = None
-        print(f"Model load failed: {e}")
+        print(f"Upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")
 def startup_event():
