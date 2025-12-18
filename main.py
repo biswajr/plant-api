@@ -13,7 +13,7 @@ import numpy as np
 load_dotenv()
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "model.keras"))
-CLASSES_PATH = Path(os.getenv("CLASSES_PATH", "class.json"))
+CLASSES_PATH = Path(os.getenv("CLASSES_PATH", "classes.json"))
 TARGET_SIZE = (128, 128)
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*")
 
@@ -32,16 +32,25 @@ app.add_middleware(
 
 def load_model_and_classes():
     global cnn, CLASS_NAMES
+    if not MODEL_PATH.exists():
+        print("model.keras not found, skipping load")
+        return
 
-    if MODEL_PATH.exists() and CLASSES_PATH.exists():
-        cnn = tf.keras.models.load_model(MODEL_PATH)
+    if not CLASSES_PATH.exists():
+        print("classes.json not found, skipping load")
+        return
+
+    try:
+        cnn = tf.keras.models.load_model(str(MODEL_PATH))
         with open(CLASSES_PATH) as f:
             CLASS_NAMES = json.load(f)
-        print("Model & classes loaded")
-    else:
+
+        print("Model & classes loaded successfully")
+
+    except Exception as e:
         cnn = None
         CLASS_NAMES = None
-        print("Model or class.json missing")
+        print(f"Model load failed: {e}")
 
 @app.on_event("startup")
 def startup_event():
