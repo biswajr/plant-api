@@ -30,7 +30,7 @@ The model is trained using the **New Plant Diseases Dataset**.
     - A custom **CNN architecture** is used, consisting of 5 blocks of `Conv2D`, `BatchNormalization`, `ReLU`, and `MaxPooling2D` layers.
     - The head of the network includes a `Flatten` layer, a `Dense` layer (1024 units), and a final `Dense` output layer with **Softmax** activation for 38-class classification.
 4.  **Artifacts**:
-    - **Model**: Saved as `plant_disease_classification_v3.keras`.
+    - **Model**: Saved as `plant_disease_classification.keras`.
     - **Class Labels**: Saved as `class.json`.
 
 ---
@@ -57,7 +57,7 @@ The deployment code is hosted in the [plant-api repository](https://github.com/b
 
 2.  **Prepare Model Artifacts**:
 
-    - Copy the trained model `plant_disease_classification_v3.keras` from the training output to the API directory.
+    - Copy the trained model `plant_disease_classification.keras` from the training output to the API directory.
     - Copy the `class.json` file to the API directory.
 
 3.  **Install Dependencies**:
@@ -99,3 +99,4 @@ Feel free to open issues or submit pull requests if you have suggestions for imp
 ## 📜 License
 
 This project is open-source. Please check the specific license files in the repository for details.
+
